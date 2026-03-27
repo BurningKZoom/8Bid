@@ -8,18 +8,18 @@ type Background = 'none' | 'beach' | 'sunset';
 const ANIMALS: Record<Animal, { name: string; image: string }> = {
   pug: {
     name: 'Pug Dog',
-    image: '/pug.png'
+    image: `${import.meta.env.BASE_URL}pug.png`
   },
   cat: {
     name: 'Black Cat',
-    image: '/cat.png'
+    image: `${import.meta.env.BASE_URL}cat.png`
   }
 };
 
 const BACKGROUNDS: Record<Background, { name: string; image: string }> = {
   none: { name: 'Transparent', image: '' },
-  beach: { name: 'Beach', image: '/backgrounds/Beach Background.png' },
-  sunset: { name: 'Sunset Beach', image: '/backgrounds/Sunset Beach Background.png' }
+  beach: { name: 'Beach', image: `${import.meta.env.BASE_URL}backgrounds/Beach Background.png` },
+  sunset: { name: 'Sunset Beach', image: `${import.meta.env.BASE_URL}backgrounds/Sunset Beach Background.png` }
 };
 
 const BUBBLE_DURATION = 5000; // 5 seconds
