@@ -26,7 +26,7 @@ const BUBBLE_DURATION = 5000; // 5 seconds
 const MAX_TEXT_LENGTH = 20;
 
 function App() {
-  const [timerMinutes, setTimerMinutes] = useState(30);
+  const [timerMinutes, setTimerMinutes] = useState<number | string>(30);
   const [notificationText, setNotificationText] = useState("Time to stretch!");
   const [selectedAnimal, setSelectedAnimal] = useState<Animal>('pug');
   const [selectedBg, setSelectedBg] = useState<Background>('none');
@@ -202,7 +202,7 @@ function App() {
   }, []);
 
   const { secondsRemaining, isActive, start, pause, reset } = useTimer({
-    initialSeconds: timerMinutes * 60,
+    initialSeconds: (Number(timerMinutes) || 0) * 60,
     onComplete: handleComplete,
   });
 
@@ -217,6 +217,11 @@ function App() {
     if (text.length <= MAX_TEXT_LENGTH) {
       setNotificationText(text);
     }
+  };
+
+  const handleTimerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setTimerMinutes(val === '' ? '' : parseInt(val));
   };
 
   return (
@@ -234,7 +239,7 @@ function App() {
         <div className="controls">
           {!isActive ? (
             <button className="btn btn-primary" onClick={start}>
-              {secondsRemaining === timerMinutes * 60 ? 'Start Timer' : 'Resume'}
+              {secondsRemaining === (Number(timerMinutes) || 0) * 60 ? 'Start Timer' : 'Resume'}
             </button>
           ) : (
             <button className="btn btn-secondary" onClick={pause}>
@@ -286,7 +291,7 @@ function App() {
               min="1"
               max="120"
               value={timerMinutes}
-              onChange={(e) => setTimerMinutes(parseInt(e.target.value) || 1)}
+              onChange={handleTimerChange}
               disabled={isActive}
             />
           </div>
