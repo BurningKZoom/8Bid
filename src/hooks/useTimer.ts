@@ -9,36 +9,38 @@ export const useTimer = ({ initialSeconds, onComplete }: UseTimerProps) => {
   const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
   const [isActive, setIsActive] = useState(false);
   const intervalRef = useRef<number | null>(null);
-  const prevInitialSeconds = useRef(initialSeconds);
 
-  // Update secondsRemaining only if initialSeconds actually changed AND we are not currently running
+  // Sync with initialSeconds when not active
   useEffect(() => {
-    if (prevInitialSeconds.current !== initialSeconds) {
-      if (!isActive) {
-        setSecondsRemaining(initialSeconds);
-      }
-      prevInitialSeconds.current = initialSeconds;
+    if (!isActive) {
+      setSecondsRemaining(initialSeconds);
     }
-  }, [initialSeconds, isActive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSeconds]);
 
-  const start = useCallback(() => setIsActive(true), []);
+  const start = useCallback(() => {
+    if (initialSeconds > 0) {
+      setIsActive(true);
+    }
+  }, [initialSeconds]);
+
   const pause = useCallback(() => setIsActive(false), []);
   const reset = useCallback(() => {
     setIsActive(false);
     setSecondsRemaining(initialSeconds);
   }, [initialSeconds]);
 
+  // Main countdown interval
   useEffect(() => {
-    if (isActive && secondsRemaining > 0) {
+    if (isActive && initialSeconds > 0) {
       intervalRef.current = window.setInterval(() => {
-        setSecondsRemaining((prev) => prev - 1);
+        setSecondsRemaining((prev) => {
+          if (prev <= 1) {
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (isActive && secondsRemaining === 0) {
-      // Automatic Loop: Reset to initialSeconds and keep isActive true
-      setSecondsRemaining(initialSeconds);
-      if (onComplete) {
-        onComplete();
-      }
     }
 
     return () => {
@@ -46,7 +48,17 @@ export const useTimer = ({ initialSeconds, onComplete }: UseTimerProps) => {
         window.clearInterval(intervalRef.current);
       }
     };
-  }, [isActive, secondsRemaining, onComplete, initialSeconds]);
+  }, [isActive, initialSeconds]);
+
+  // Handle completion and loop
+  useEffect(() => {
+    if (isActive && secondsRemaining === 0 && initialSeconds > 0) {
+      setSecondsRemaining(initialSeconds);
+      if (onComplete) {
+        onComplete();
+      }
+    }
+  }, [isActive, secondsRemaining, initialSeconds, onComplete]);
 
   return {
     secondsRemaining,
