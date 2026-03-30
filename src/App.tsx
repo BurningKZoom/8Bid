@@ -31,7 +31,6 @@ const ANIMALS: Record<Animal, {
     sleepImage: `${import.meta.env.BASE_URL}bulldog-sleep`,
     icon: `${import.meta.env.BASE_URL}bulldog-static.png`,
     isAnimated: true,
-    customClass: 'bulldog-scale',
     sleepDurationRange: [1, 3] // Light sleeper
   }
 };
@@ -57,6 +56,35 @@ function App() {
   const pipWindowRef = useRef<Window | null>(null);
   const bubbleTimeoutRef = useRef<number | null>(null);
   const sleepTimeoutRef = useRef<number | null>(null);
+  const pipElementsRef = useRef<{
+    container: HTMLDivElement;
+    napValue: HTMLDivElement;
+    charContainer: HTMLDivElement;
+    bubble: HTMLDivElement | null;
+    bubbleText: Text | null;
+    sprite: HTMLImageElement;
+  } | null>(null);
+
+  // Preload all animation frames to prevent lag on first use
+  useEffect(() => {
+    const imagesToPreload: string[] = [];
+    Object.values(ANIMALS).forEach(animal => {
+      if (animal.isAnimated) {
+        [animal.image, animal.stretchImage, animal.sleepImage].forEach(baseUrl => {
+          if (baseUrl) {
+            for (let i = 1; i <= 4; i++) {
+              imagesToPreload.push(`${baseUrl}/${i}.png`);
+            }
+          }
+        });
+      }
+    });
+
+    imagesToPreload.forEach(src => {
+      const img = new Image();
+      img.src = src;
+    });
+  }, []);
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -94,6 +122,7 @@ function App() {
   }, []);
 
   const handleComplete = useCallback(() => {
+    setCurrentFrame(1);
     playNotificationSound();
     setShowBubble(true);
   }, [playNotificationSound]);
@@ -105,6 +134,7 @@ function App() {
 
   const startSleeping = useCallback(() => {
     if (ANIMALS[selectedAnimal].sleepImage === null) return;
+    setCurrentFrame(1);
     setIsSleeping(true);
     setShowBubble(false);
     
@@ -142,7 +172,7 @@ function App() {
       const playStretch = (frame: number) => {
         setCurrentFrame(frame);
         const nextFrame = (frame % 4) + 1;
-        const delay = frame === 3 ? 500 : 200;
+        const delay = (frame === 3 || frame === 4) ? 500 : 200;
         timeoutId = window.setTimeout(() => playStretch(nextFrame), delay);
       };
       
@@ -154,10 +184,17 @@ function App() {
       }, 1000);
       return () => clearInterval(interval);
     } else {
-      const interval = setInterval(() => {
-        setCurrentFrame(f => (f % 4) + 1);
-      }, 200);
-      return () => clearInterval(interval);
+      let timeoutId: number;
+      const playIdle = (frame: number) => {
+        setCurrentFrame(frame);
+        const nextFrame = (frame % 4) + 1;
+        // Frame 3 and 4 get a slightly longer pause for a more natural rhythm
+        const delay = (frame === 3 || frame === 4) ? 300 : 200;
+        timeoutId = window.setTimeout(() => playIdle(nextFrame), delay);
+      };
+      
+      playIdle(1);
+      return () => clearTimeout(timeoutId);
     }
   }, [showBubble, isSleeping, selectedAnimal]);
 
@@ -200,95 +237,107 @@ function App() {
             <button className="close-bubble" onClick={() => setShowBubble(false)}>×</button>
           </div>
         )}
-        {isAnimated ? (
-          <div 
-            className={`character-sprite ${isLarge ? 'large' : ''}`}
-            style={{ backgroundImage: `url(${imageUrl})` }}
-            aria-label={ANIMALS[animal].name}
-          />
-        ) : (
-          <img 
-            src={imageUrl}
-            className={`character-img ${isLarge ? 'large' : ''}`}
-            alt={ANIMALS[animal].name}
-          />
-        )}
+        <img 
+          src={isAnimated ? imageUrl : ANIMALS[animal].image}
+          className={`character-sprite ${isLarge ? 'large' : ''} ${!isAnimated ? 'character-img' : ''}`}
+          alt={ANIMALS[animal].name}
+        />
       </div>
     );
   };
 
   const updatePiPContent = useCallback(() => {
     if (pipWindowRef.current) {
-      const body = pipWindowRef.current.document.body;
-      body.innerHTML = '';
-      
-      const pipContainer = pipWindowRef.current.document.createElement('div');
-      pipContainer.className = 'pip-container';
-      
-      pipContainer.style.backgroundImage = `url('${BACKGROUNDS[selectedBg].image}')`;
-      pipContainer.style.backgroundSize = 'cover';
-      pipContainer.style.backgroundPosition = 'center';
-
-      const napTimer = pipWindowRef.current.document.createElement('div');
-      napTimer.className = 'nap-timer';
-      const napLabel = pipWindowRef.current.document.createElement('div');
-      napLabel.className = 'nap-label';
-      napLabel.textContent = 'NAP TIME';
-      const napValue = pipWindowRef.current.document.createElement('div');
-      napValue.className = 'nap-value';
-      napValue.textContent = formatTime(napTime);
-      napTimer.appendChild(napLabel);
-      napTimer.appendChild(napValue);
-      pipContainer.appendChild(napTimer);
-
-      const charContainer = pipWindowRef.current.document.createElement('div');
       const isStretching = showBubble && ANIMALS[selectedAnimal].stretchImage !== null;
       const isActuallySleeping = isSleeping && ANIMALS[selectedAnimal].sleepImage !== null;
       const customClass = ANIMALS[selectedAnimal].customClass || '';
+      
+      if (!pipElementsRef.current) {
+        const body = pipWindowRef.current.document.body;
+        body.innerHTML = '';
+        
+        const pipContainer = pipWindowRef.current.document.createElement('div');
+        pipContainer.className = 'pip-container';
+        
+        const napTimer = pipWindowRef.current.document.createElement('div');
+        napTimer.className = 'nap-timer';
+        const napLabel = pipWindowRef.current.document.createElement('div');
+        napLabel.className = 'nap-label';
+        napLabel.textContent = 'NAP TIME';
+        const napValue = pipWindowRef.current.document.createElement('div');
+        napValue.className = 'nap-value';
+        napTimer.appendChild(napLabel);
+        napTimer.appendChild(napValue);
+        pipContainer.appendChild(napTimer);
+
+        const charContainer = pipWindowRef.current.document.createElement('div');
+        
+        const sprite = pipWindowRef.current.document.createElement('img');
+        sprite.alt = ANIMALS[selectedAnimal].name;
+        charContainer.appendChild(sprite);
+        pipContainer.appendChild(charContainer);
+        body.appendChild(pipContainer);
+
+        pipElementsRef.current = {
+          container: pipContainer,
+          napValue,
+          charContainer,
+          bubble: null,
+          bubbleText: null,
+          sprite
+        };
+      }
+
+      const { container, napValue, charContainer, sprite } = pipElementsRef.current;
+      
+      container.style.backgroundImage = `url('${BACKGROUNDS[selectedBg].image}')`;
+      napValue.textContent = formatTime(napTime);
       charContainer.className = `character-container large ${isStretching ? 'stretching' : ''} ${isActuallySleeping ? 'sleeping' : ''} ${customClass}`;
       
       if (showBubble) {
-        const bubble = pipWindowRef.current.document.createElement('div');
-        bubble.className = 'speech-bubble';
-        bubble.textContent = notificationText;
-        const closeBtn = pipWindowRef.current.document.createElement('button');
-        closeBtn.className = 'close-bubble';
-        closeBtn.textContent = '×';
-        closeBtn.onclick = () => setShowBubble(false);
-        bubble.appendChild(closeBtn);
-        charContainer.appendChild(bubble);
+        if (!pipElementsRef.current.bubble) {
+          const bubble = pipWindowRef.current.document.createElement('div');
+          bubble.className = 'speech-bubble';
+          const bubbleText = pipWindowRef.current.document.createTextNode(notificationText);
+          bubble.appendChild(bubbleText);
+          const closeBtn = pipWindowRef.current.document.createElement('button');
+          closeBtn.className = 'close-bubble';
+          closeBtn.textContent = '×';
+          closeBtn.onclick = () => setShowBubble(false);
+          bubble.appendChild(closeBtn);
+          charContainer.insertBefore(bubble, sprite);
+          pipElementsRef.current.bubble = bubble;
+          pipElementsRef.current.bubbleText = bubbleText;
+        } else if (pipElementsRef.current.bubbleText) {
+          pipElementsRef.current.bubbleText.nodeValue = notificationText;
+        }
+      } else if (pipElementsRef.current.bubble) {
+        pipElementsRef.current.bubble.remove();
+        pipElementsRef.current.bubble = null;
+        pipElementsRef.current.bubbleText = null;
       }
 
+      let imageUrl = ANIMALS[selectedAnimal].image;
       if (ANIMALS[selectedAnimal].isAnimated) {
-        const sprite = pipWindowRef.current.document.createElement('div');
-        sprite.className = `character-sprite large`;
-        
-        let imageUrl = `${ANIMALS[selectedAnimal].image}/${currentFrame}.png`;
         if (isStretching) {
           imageUrl = `${ANIMALS[selectedAnimal].stretchImage}/${currentFrame}.png`;
         } else if (isActuallySleeping) {
           imageUrl = `${ANIMALS[selectedAnimal].sleepImage}/${currentFrame}.png`;
+        } else {
+          imageUrl = `${ANIMALS[selectedAnimal].image}/${currentFrame}.png`;
         }
-        
-        sprite.style.backgroundImage = `url(${imageUrl})`;
-        charContainer.appendChild(sprite);
-      } else {
-        const img = pipWindowRef.current.document.createElement('img');
-        img.className = 'character-img large';
-        img.src = ANIMALS[selectedAnimal].image;
-        charContainer.appendChild(img);
       }
       
-      pipContainer.appendChild(charContainer);
-      body.appendChild(pipContainer);
+      if (sprite.src !== imageUrl) {
+        sprite.src = imageUrl;
+      }
+      sprite.className = `character-sprite large ${!ANIMALS[selectedAnimal].isAnimated ? 'character-img' : ''}`;
     }
   }, [selectedAnimal, selectedBg, showBubble, notificationText, currentFrame, isSleeping, napTime, formatTime]);
 
   const togglePiP = async () => {
     if (pipWindowRef.current) {
       pipWindowRef.current.close();
-      pipWindowRef.current = null;
-      setIsPiPOpen(false);
       return;
     }
 
@@ -335,6 +384,7 @@ function App() {
 
       pipWindow.addEventListener('pagehide', () => {
         pipWindowRef.current = null;
+        pipElementsRef.current = null;
         setIsPiPOpen(false);
       });
     } catch (err) {
@@ -344,7 +394,7 @@ function App() {
 
   useEffect(() => {
     updatePiPContent();
-  }, [selectedAnimal, selectedBg, showBubble, notificationText, updatePiPContent, isSleeping]);
+  }, [updatePiPContent]);
 
   useEffect(() => {
     if (showBubble) {
@@ -420,7 +470,10 @@ function App() {
                 <div
                   key={key}
                   className={`animal-option ${selectedAnimal === key ? 'selected' : ''}`}
-                  onClick={() => setSelectedAnimal(key)}
+                  onClick={() => {
+                    setSelectedAnimal(key);
+                    setCurrentFrame(1);
+                  }}
                   title={ANIMALS[key].name}
                 >
                   <img src={ANIMALS[key].icon} alt={ANIMALS[key].name} className={`selection-icon ${ANIMALS[key].customClass || ''}`} />
@@ -453,6 +506,7 @@ function App() {
               max="120"
               value={timerMinutes}
               onChange={handleTimerChange}
+              onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
               disabled={isActive}
             />
           </div>
